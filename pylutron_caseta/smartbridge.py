@@ -539,7 +539,8 @@ class Smartbridge:
         tilt = status.get("Tilt", None)
         _LOG.debug("zone=%s level=%s", zone, level)
         device = self.get_device_by_zone_id(zone)
-        device["current_state"] = level
+        if level >= 0:
+            device["current_state"] = level
         device["fan_speed"] = fan_speed
         device["tilt"] = tilt
         if device["device_id"] in self._subscribers:

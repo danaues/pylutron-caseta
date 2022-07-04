@@ -601,9 +601,10 @@ class Smartbridge:
                         )
                         self._handle_one_zone_status(response)
 
-            elif (project["ProductType"] == "Lutron RadioRA 3 Project") :
-                # RadioRa3 Bridge (processor) Device detected
-                _LOG.debug("RA3 bridge detected")
+            elif (project["ProductType"] == "Lutron RadioRA 3 Project"
+                  or project["ProductType"] == "Lutron HWQS Project"):
+                # RadioRa3 or QSX Bridge (processor) Device detected
+                _LOG.debug("RA3 or QSX bridge detected")
 
                 # Load processor as devices[1] for compatibility with lutron_caseta HA integration
                 await self._load_ra3_processor()

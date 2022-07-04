@@ -297,6 +297,37 @@ class Smartbridge:
         zone_id = device.get("zone")
         if not zone_id:
             return
+        
+        # Handle Ketra lamps
+        if device.get("type") == "SpectrumTune":
+            if fade_time is not None:
+                await self._request(
+                    "CreateRequest",
+                    f"/zone/{zone_id}/commandprocessor",
+                    {
+                        "Command": {
+                            "CommandType": "GoToSpectrumTuningLevel",
+                            "SpectrumTuningLevelParameters": {
+                                "Level": value,
+                                "FadeTime": _format_duration(fade_time),
+                            },
+                        }
+                    },
+                )
+            else:
+                await self._request(
+                    "CreateRequest",
+                    f"/zone/{zone_id}/commandprocessor",
+                    {
+                        "Command": {
+                            "CommandType": "GoToSpectrumTuningLevel",
+                            "SpectrumTuningLevelParameters": {
+                                "Level": value
+                            },
+                        }
+                    },
+                )
+            return
 
         if device.get("type") in _LEAP_DEVICE_TYPES["light"] and fade_time is not None:
             await self._request(

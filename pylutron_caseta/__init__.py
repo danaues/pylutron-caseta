@@ -13,6 +13,7 @@ _LEAP_DEVICE_TYPES = {
         "TempInWallPaddleDimmer",
         "WallDimmerWithPreset",
         "Dimmed",
+        "SpectrumTune", # Ketra lamps
     ],
     "switch": [
         "WallSwitch",

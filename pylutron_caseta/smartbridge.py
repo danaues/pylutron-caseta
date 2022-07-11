@@ -294,10 +294,25 @@ class Smartbridge:
         """
         device = self.devices[device_id]
 
+        # Handle keypad LEDs
+        if device.get("type") == "KeypadLED":
+            target_state = "On" if value > 0 else "Off"
+            await self._request(
+                    "UpdateRequest",
+                    f"/led/{device_id}/status",
+                    {
+                        "LEDStatus": {
+                            "State": target_state
+                        }
+                    },
+                )
+            return
+
+        # Any other device types must have a zone ID associated
         zone_id = device.get("zone")
         if not zone_id:
             return
-        
+
         # Handle Ketra lamps
         if device.get("type") == "SpectrumTune":
             if fade_time is not None:
@@ -561,6 +576,23 @@ class Smartbridge:
             if button_id in self._button_subscribers:
                 self._button_subscribers[button_id](button_event)
 
+    def _handle_button_led_status(self, response: Response):
+        """Handle events for button LED status changes"""
+        _LOG.debug("Handling button LED status: %s", response)
+
+        if response.Body is None:
+            return
+
+        status = response.Body["LEDStatus"]
+        button_led_id = id_from_href(status["LED"]["href"])
+        state = 1 if  status["State"] == "On" else 0
+
+        if button_led_id in self.devices:
+            self.devices[button_led_id]["current_state"] = state
+            # Notify any subscribers of the change to LED status
+            if button_led_id in self._subscribers:
+                self._subscribers[button_led_id]()
+
     def _handle_multi_zone_status(self, response: Response):
         _LOG.debug("Handling zone status: %s", response)
 
@@ -771,9 +803,9 @@ class Smartbridge:
             combined_name = "_".join((area_name, station_name))
 
             for device_json in ganged_devices_json:
-                await self._load_ra3_station_device(combined_name, device_json)
+                await self._load_ra3_station_device(combined_name, device_json, station_name, area)
 
-    async def _load_ra3_station_device(self, name, device_json):
+    async def _load_ra3_station_device(self, name, device_json, station_name, area):
         device_id = id_from_href(device_json["Device"]["href"])
         device_type = device_json["Device"]["DeviceType"]
 
@@ -801,7 +833,17 @@ class Smartbridge:
                 device_type = "SunnataKeypad_3ButtonRaiseLower"
             elif device_model == "RRST-W4B-XX":
                 device_type = "SunnataKeypad_4Button"
-        
+
+        # if device is Palladiom keypad, determine buttonlayout and override type
+        if device_type == "PalladiomKeypad":
+            if device_model == "HQWT-U-P2W":
+                device_type = "PalladiomKeypad_2Button"
+            elif device_model == "HQWT-U-P3W":
+                device_type = "PalladiomKeypad_3Button"
+            elif device_model == "HQWT-U-PRW":
+                device_type = "PalladiomKeypad_3ButtonRaiseLower"
+            elif device_model == "HQWT-U-P4W":
+                device_type = "PalladiomKeypad_4Button"
 
         if "SerialNumber" in device_json.Body["Device"]:
             device_serial = device_json.Body["Device"]["SerialNumber"]
@@ -826,7 +868,7 @@ class Smartbridge:
             },
         ).update(
             zone=None,
-            name="_".join((name, device_name, device_type)),
+            name="_".join((area["name"], name, device_name, device_type)),
             button_groups=button_groups,
             type=device_type,
             model=device_model,
@@ -835,9 +877,9 @@ class Smartbridge:
 
         for button_expanded_json in button_group_json.Body["ButtonGroupsExpanded"]:
             for button_json in button_expanded_json["Buttons"]:
-                self._load_ra3_button(button_json, self.devices[device_id])
+                await self._load_ra3_button(button_json, self.devices[device_id], station_name, area)
 
-    def _load_ra3_button(self, button_json, device):
+    async def _load_ra3_button(self, button_json, device, station_name, area):
         button_id = id_from_href(button_json["href"])
         button_number = button_json["ButtonNumber"]
         button_engraving = button_json.get("Engraving", None)
@@ -850,6 +892,9 @@ class Smartbridge:
         button_led_obj = button_json.get("AssociatedLED", None)
         if button_led_obj is not None:
             button_led = id_from_href(button_led_obj["href"])
+            button_led_href = button_led_obj["href"]
+            await self._load_ra3_button_led(button_led, button_name, station_name, area)
+
         self.buttons.setdefault(
             button_id,
             {
@@ -859,13 +904,31 @@ class Smartbridge:
                 "button_group": parent_id,
             },
         ).update(
-            name=device["name"],
+            name="_".join((area["name"], station_name, button_name, device["name"])),
             type=device["type"],
             model=device["model"],
-            serial=device["serial"],
+            serial="_".join(("lcra3",str(self.devices["1"]["serial"]),str(button_id),str(button_number))),
             button_name=button_name,
             button_led=button_led,
+            zone=None,
         )
+
+    async def _load_ra3_button_led(self, button_led, button_name, station_name, area):
+        self.devices.setdefault(
+            button_led,
+            {
+                "device_id": button_led,
+                "current_state": -1,
+                "fan_speed": None,
+            },
+        ).update(
+            name="_".join((area["name"], station_name, f"{button_name} LED")),
+            type="KeypadLED",
+            model="KeypadLED",
+            serial="_".join(("lcra3",str(self.devices["1"]["serial"]),str(button_led))),
+            zone=None,
+        )
+        await self._subscribe_to_button_led_status(button_led)
 
     async def _load_ra3_zones(self, area):
         # For each area, process zones.  They will masquerade as devices
@@ -1047,6 +1110,20 @@ class Smartbridge:
                 )
                 _LOG.debug("Subscribed to button %s status", button)
                 self._handle_button_status(response)
+        except BridgeResponseError as ex:
+            _LOG.error("Failed device status subscription: %s", ex.response)
+            return
+
+    async def _subscribe_to_button_led_status(self, button_led_id):
+        """Subscribe to button LED status updates."""
+        _LOG.debug(f"Subscribing to button LED status updates for LED ID {button_led_id}")
+        try:
+            response, _ = await self._subscribe(
+                f"/led/{button_led_id}/status",
+                self._handle_button_led_status,
+            )
+            _LOG.debug("Subscribed to button LED %s status", button_led_id)
+            self._handle_button_led_status(response)
         except BridgeResponseError as ex:
             _LOG.error("Failed device status subscription: %s", ex.response)
             return

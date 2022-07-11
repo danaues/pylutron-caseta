@@ -24,6 +24,7 @@ _LEAP_DEVICE_TYPES = {
         "SunnataSwitch",
         "TempInWallPaddleSwitch",
         "Switched",
+        "KeypadLED",
     ],
     "fan": [
         "CasetaFanSpeedController",
@@ -65,6 +66,11 @@ _LEAP_DEVICE_TYPES = {
         "GrafikTHybridKeypad",
         "AlisseKeypad",
         "PalladiomKeypad",
+        "PalladiomKeypad_2Button"
+        "PalladiomKeypad_3Button"
+        "PalladiomKeypad_3ButtonRaiseLower"
+        "PalladiomKeypad_4Button"
+        "HomeownerKeypad",
     ],
 }
 

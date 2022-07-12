@@ -917,7 +917,7 @@ class Smartbridge:
                 "button_group": parent_id,
             },
         ).update(
-            name="_".join((area["name"], station_name, button_name, device["name"])),
+            name="_".join((area["name"], station_name, button_name)),
             type=device["type"],
             model=device["model"],
             serial="_".join(("lcra3",str(self.devices["1"]["serial"]),str(button_id),str(button_number))),

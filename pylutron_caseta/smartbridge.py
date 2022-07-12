@@ -475,6 +475,19 @@ class Smartbridge:
                 {"Command": {"CommandType": "PressAndRelease"}},
             )
 
+    async def tap_button(self, button_id: str):
+        """
+        Sends a press and release message for the given button ID.
+
+        :param button_id: button ID, e.g. 23
+        """
+        if button_id in self.buttons:
+            await self._request(
+                "CreateRequest",
+                f"/button/{button_id}/commandprocessor",
+                {"Command": {"CommandType": "PressAndRelease"}},
+            )
+
     def _get_zone_id(self, device_id: str) -> Optional[str]:
         """
         Return the zone id for an given device.

@@ -556,11 +556,13 @@ class Smartbridge:
                 self._leap = None
 
     def _handle_one_zone_status(self, response: Response):
+        _LOG.debug("Handling single zone status: %s", response)
         body = response.Body
         if body is None:
             return
+        self._handle_zone_status(body["ZoneStatus"])
 
-        status = body["ZoneStatus"]
+    def _handle_zone_status(self, status):
         zone = id_from_href(status["Zone"]["href"])
         level = status.get("Level", -1)
         fan_speed = status.get("FanSpeed", None)
@@ -607,15 +609,13 @@ class Smartbridge:
                 self._subscribers[button_led_id]()
 
     def _handle_multi_zone_status(self, response: Response):
-        _LOG.debug("Handling zone status: %s", response)
+        _LOG.debug("Handling multi zone status: %s", response)
 
         if response.Body is None:
             return
 
-        for status in response.Body["ZoneStatuses"]:
-            self._handle_one_zone_status(
-                Response(ResponseHeader(), None, {"ZoneStatus": status})
-            )
+        for zonestatus in response.Body["ZoneStatuses"]:
+            self._handle_zone_status(zonestatus)
 
     def _handle_occupancy_group_status(self, response: Response):
         _LOG.debug("Handling occupancy group status: %s", response)
@@ -658,7 +658,15 @@ class Smartbridge:
             project_json = await self._request("ReadRequest", f"/project")
             project = project_json.Body["Project"]
 
-            if (project["ProductType"] == "Lutron Smart Bridge Project"):
+            if project["ProductType"] == "Lutron RadioRA 3 Project":
+                # RadioRa3 Bridge (processor) Device detected
+                _LOG.debug("RA3 bridge detected")
+
+                # Load processor as devices[1] for compatibility with lutron_caseta HA integration
+                await self._load_ra3_processor()
+                await self._load_ra3_devices()
+                await self._subscribe_to_button_status()
+            else:
                 # Caseta Bridge Device detected
                 _LOG.debug("Caseta bridge detected")
                 
@@ -712,7 +720,7 @@ class Smartbridge:
             self._leap.close()
             raise
 
-    async def _load_devices(self) -> bool:
+    async def _load_devices(self):
         """Load the device list from the SSL LEAP server interface."""
         _LOG.debug("Loading devices")
         device_json = await self._request("ReadRequest", "/device")
@@ -860,12 +868,8 @@ class Smartbridge:
 
         if "SerialNumber" in device_json.Body["Device"]:
             device_serial = device_json.Body["Device"]["SerialNumber"]
-            _LOG.debug("Found control device with serial")    
         else:
-            _LOG.debug("Found control device missing serial")    
-            device_serial = "_".join((name, device_type))
-        
-        _LOG.debug(device_serial)
+            device_serial = None
 
         button_groups = [
             id_from_href(group["href"])
@@ -967,7 +971,7 @@ class Smartbridge:
                 button_groups=None,
                 type=zone_type,
                 model=None,
-                serial="_".join(("lcra3",str(self.devices["1"]["serial"]),str(area_id),str(zone_id))),
+                serial=None,
             )
 
     async def _load_lip_devices(self):

@@ -934,12 +934,14 @@ class Smartbridge:
                 "button_group": parent_id,
             },
         ).update(
-            name=keypad_device["name"],
+            name="_".join((keypad_device["name"], button_name)),
             type=keypad_device["type"],
             model=keypad_device["model"],
-            serial=keypad_device["serial"],
+            serial=None,
             button_name=button_name,
             button_led=button_led,
+            parentdevice_serial=keypad_device["serial"],
+            parentdevice_name=keypad_device["name"],
         )
 
         # Load the button LED details
@@ -957,6 +959,7 @@ class Smartbridge:
         button = self.buttons[button_id]
         button_name = button["button_name"]
         keypad_name = keypad_device["name"]
+        keypad_serial = keypad_device["serial"]
         #station_name = keypad_device["control_station_name"]
 
         self.devices.setdefault(
@@ -972,6 +975,8 @@ class Smartbridge:
             model="KeypadLED",
             serial=None,
             zone=None,
+            parentdevice_serial=keypad_serial,
+            parentdevice_name=keypad_name,
         )
         await self._subscribe_to_button_led_status(button_led)
 

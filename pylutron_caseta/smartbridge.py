@@ -962,6 +962,7 @@ class Smartbridge:
         keypad_serial = keypad_device["serial"]
         #station_name = keypad_device["control_station_name"]
 
+
         self.devices.setdefault(
             button_led,
             {
